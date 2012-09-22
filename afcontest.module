@@ -1,4 +1,13 @@
 <?php
+
+// http://api.drupal.org/api/drupal/developer!hooks!node.php/function/hook_node_info/6
+function afcontest_node_info() {
+    return array(
+        
+    );
+}
+
+/*
 function funsub_menu() {
   $contest_ids = array( "2009", "2010", "2011" );
 
@@ -162,10 +171,6 @@ function funsub_video_all( $contest_id, $data_only = false ) {
 	// Rucne vlozene prispevky
     
 	$injects = array(
-	/*	array( "uid"=>"975", "name"=>"ajdalenka25", "subs"=>array(5) ),
-		array( "uid"=>"2052", "name"=>"Lenna", "subs"=>array(4) ),
-		array( "uid"=>"2136", "name"=>"MadYoko", "subs"=>array(5) ),
-		array( "uid"=>"1489", "name"=>"Tokiya", "subs"=>array(3) )*/
 	);
 	
 	foreach ($injects as $inject) {
@@ -471,3 +476,4 @@ function funsub_odeslano($contest_id) {
   if ($pocet > 0) return true;
   else return false;
 }
+*/

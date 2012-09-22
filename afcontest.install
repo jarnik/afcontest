@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * Implementation of hook_install().
+ */
+function afcontest_install() {
+  // Create tables.
+  drupal_install_schema('afcontest');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function afcontest_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('afcontest');
+}
+
+/**
+ * Implementation of hook_schema().
+ */
+function afcontest_schema() {
+  $schema['afcontest'] = array(
+    'description' => 'Seznam nodu prislusnych k dane soutezi.',
+    'fields' => array(
+      'nid'     => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Contest {node}.nid."
+        ),
+      'name'  => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'Nazev souteze.',
+        ),
+      'slug'  => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'Zkraceny nazev bez diakritiky.',
+        ),
+      'year' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Rok konani souteze.'
+        ),
+      'title_page' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => 'Node ID titulni stranky.'
+        ),
+      'submit_form' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => 'Node ID formulare pro zasilani prispevku.'
+        ),
+      'gallery' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => 'Node ID galerie prispevku - hlasovani a pozdeji i vysledky.'
+        ),
+      'vote_form' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => 'Node ID formulare pro hlasovani.'
+        ),
+      'results_page' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => 'Node ID stranky s vysledky.'
+        )
+      ),
+    'primary key' => array('nid'),
+    );
+
+  return $schema;
+}
+
