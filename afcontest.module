@@ -3,8 +3,94 @@
 // http://api.drupal.org/api/drupal/developer!hooks!node.php/function/hook_node_info/6
 function afcontest_node_info() {
     return array(
+        'afcontest' => array(
+            'name' => 'Soutěž',
+            'module' => 'afcontest',
+            'description' => 'Animefestí soutěž, automaticky si vytvoří potřebné formuláře a galerii.',
+            'title_label' => 'Název',
+            'has_body' => FALSE
+        )
         
     );
+}
+
+function afcontest_form(&$node, $form_state) {
+    global $user;
+
+    $admin = user_access('administer nodes');
+    
+    $type = node_get_types('type', $node);
+
+    $form = array(
+        '#cache' => TRUE,
+    );
+
+    $form['title'] = array(
+      '#type' => 'textfield',
+      '#title' => check_plain($type->title_label),
+      '#required' => TRUE,
+      '#default_value' => $node->title,
+      '#weight' => -5,
+    );
+    $form['slug'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Slug (URL zkratka bez hacku, carek a mezer)', 
+        '#default_value' => $node->slug, 
+        '#maxlength' => 25,
+    );
+    $form['year'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Rok', 
+        '#default_value' => $node->year, 
+        '#maxlength' => 4,
+    );
+}
+
+/**
+ * Implementation of hook_load().
+ */
+function afcontest_load($node) {
+  global $user;
+  $afcontest = db_fetch_object(db_query("SELECT * FROM {afcontest} WHERE nid = %d", $node->nid));
+  return $afcontest;
+}
+
+/**
+ * Implementation of hook_insert().
+ */
+function afcontest_insert($node) {
+
+  db_query("INSERT INTO {afcontest} (nid, year, slug) VALUES (%d, %s, %s)", $node->nid, $node->year, $node->slug);
+
+}
+
+/**
+ * Implementation of hook_update().
+ */
+function afcontest_update($node) {
+  // Update afcontest settings.
+  db_query('UPDATE {afcontest} SET year = %s, slug = %s WHERE nid = %d', $node->year, $node->slug, $node->nid);
+}
+
+/**
+ * Implementation of hook_delete().
+ */
+function afcontest_delete($node) {
+  db_query("DELETE FROM {afcontest} WHERE nid = %d", $node->nid);
+}
+
+/**
+ * Implementation of hook_view().
+ *
+ * @param $block
+ *   An extra parameter that adapts the hook to display a block-ready
+ *   rendering of the afcontest.
+ */
+function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
+  global $user;
+  $output = '';
+
+  return $node;
 }
 
 /*
