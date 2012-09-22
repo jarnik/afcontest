@@ -42,8 +42,9 @@ function afcontest_form(&$node, $form_state) {
         '#type' => 'textfield', 
         '#title' => 'Rok', 
         '#default_value' => $node->year, 
-        '#maxlength' => 4,
+        '#maxlength' => 4
     );
+    return $form;
 }
 
 /**
@@ -60,7 +61,7 @@ function afcontest_load($node) {
  */
 function afcontest_insert($node) {
 
-  db_query("INSERT INTO {afcontest} (nid, year, slug) VALUES (%d, %s, %s)", $node->nid, $node->year, $node->slug);
+  db_query("INSERT INTO {afcontest} (nid, year, slug) VALUES (%d, '%s', '%s')", $node->nid, $node->year, $node->slug);
 
 }
 
@@ -69,7 +70,7 @@ function afcontest_insert($node) {
  */
 function afcontest_update($node) {
   // Update afcontest settings.
-  db_query('UPDATE {afcontest} SET year = %s, slug = %s WHERE nid = %d', $node->year, $node->slug, $node->nid);
+  db_query('UPDATE {afcontest} SET year = "%s", slug = "%s" WHERE nid = %d', $node->year, $node->slug, $node->nid);
 }
 
 /**
@@ -88,8 +89,21 @@ function afcontest_delete($node) {
  */
 function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   global $user;
-  $output = '';
+  $output = '<p>Název: '.$node->title.'</br>Rok: '.$node->year.'</br>Slug: '.$node->slug.'</p>';
 
+  $output .= '<h3>Formulář pro odesílání příspěvků: <a href="asdasd">[LINK]</a></h3>';
+  
+  $output .= '<p class="links"><a href="asas">Vytvořit galerii z příspěvků a hlasovací formulář</a></p>';
+
+  $output .= '<h3>Galerie: <a href="asdasd">[LINK]</a></h3>';
+  $output .= '<h3>Hlasovací formulář: <a href="asdasd">[LINK]</a></h3>';
+
+  $output .= '<p class="links"><a href="asas">Vytvořit stránku výsledků, srovnat galerii podle výsledků</a></p>';
+  $output .= '<h3>Výsledky: <a href="asdasd">[LINK]</a></h3>';
+
+  $node->content['body'] = array(
+    '#value' => $output
+  );
   return $node;
 }
 

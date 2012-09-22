@@ -1,7 +1,8 @@
 ﻿; $Id$
 name = AF contest
-description = Modul pro Animefestu souteze
+description = Modul pro Animefestí soutěže
 version = 0.1
 core = 6.x
 dependencies[] = webform
 dependencies[] = bbcode
+dependencies[] = gallerix
