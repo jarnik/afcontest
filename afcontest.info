@@ -1,0 +1,7 @@
+﻿; $Id$
+name = Funsub
+description = Funsub
+version = 0.1
+core = 6.x
+dependencies[] = webform
+dependencies[] = bbcode
