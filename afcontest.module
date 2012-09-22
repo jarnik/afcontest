@@ -89,22 +89,44 @@ function afcontest_delete($node) {
  */
 function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   global $user;
+
+  if ( $_GET['action'] == "create_voting" ) {
+      $node = afcontest_create_voting( $node );
+  } else if ( $_GET['action'] == "create_results" ) {
+      $node = afcontest_create_results( $node );
+  }
+
   $output = '<p>Název: '.$node->title.'</br>Rok: '.$node->year.'</br>Slug: '.$node->slug.'</p>';
 
-  $output .= '<h3>Formulář pro odesílání příspěvků: <a href="asdasd">[LINK]</a></h3>';
+  $url_submit_form = url('node/1507', array('absolute'=>TRUE));
+  $output .= '<h3>Formulář pro odesílání příspěvků: <a href="'.$url_submit_form.'">'.$url_submit_form.'</a></h3>';
   
-  $output .= '<p class="links"><a href="asas">Vytvořit galerii z příspěvků a hlasovací formulář</a></p>';
+  $output .= '<p class="links"><a href="?action=create_voting">Vytvořit galerii z příspěvků a hlasovací formulář</a></p>';
 
-  $output .= '<h3>Galerie: <a href="asdasd">[LINK]</a></h3>';
-  $output .= '<h3>Hlasovací formulář: <a href="asdasd">[LINK]</a></h3>';
+  $url_gallery = url('node/1507', array('absolute'=>TRUE));
+  $output .= '<h3>Galerie: <a href="'.$url_gallery.'">'.$url_gallery.'</a></h3>';
+  $url_vote_form = url('node/1507', array('absolute'=>TRUE));
+  $output .= '<h3>Hlasovací formulář: <a href="'.$url_vote_form.'">'.$url_vote_form.'</a></h3>';
 
-  $output .= '<p class="links"><a href="asas">Vytvořit stránku výsledků, srovnat galerii podle výsledků</a></p>';
-  $output .= '<h3>Výsledky: <a href="asdasd">[LINK]</a></h3>';
+  $output .= '<p class="links"><a href="?action=create_results">Vytvořit stránku výsledků, srovnat galerii podle výsledků</a></p>';
+  $url_results_page = url('node/1507', array('absolute'=>TRUE));
+  $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
+
+  $output .= print_r($_GET, true);
 
   $node->content['body'] = array(
     '#value' => $output
   );
   return $node;
+}
+
+function afcontest_create_voting( $node ) {
+    db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
+    return $node;
+}
+
+function afcontest_create_results( $node ) {
+    return $node;
 }
 
 /*
