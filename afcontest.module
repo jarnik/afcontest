@@ -63,21 +63,92 @@ function afcontest_insert($node) {
   db_query("INSERT INTO {afcontest} (nid, year, slug) VALUES (%d, '%s', '%s')", $node->nid, $node->year, $node->slug);
 
   //afcontest_add_new();
+  afcontest_add_new( $node );
+}
+
+function afcontest_create_submit_form($file_save_dir, $node) {
+  $components = array();
+  $components[1] = array(
+    'cid' => 1,
+    'pid' => 0,
+    // I don't trust the admin to make a key based on input :)
+    'form_key' => 'fotka',
+    'name' => "Fotka",
+    // I want all lines to be numeric type component.
+    'type' => 'file',
+    'extra' => array(
+      'filtering' => array (
+        'types' => array('jpg','png'),
+        'size' => 800
+      ),
+      'savelocation' => $file_save_dir
+    ),
+    'mandatory' => '1',
+    'weight' => 0,
+    'page_num' => 1
+  );
+
+  $n = array(
+    'type' => 'webform',
+    'uid' => $node->uid,
+    'title' => $node->title." ".$node->year." - Odeslání fotky",
+    'name' => $node->title." ".$node->year." - Odeslání fotky",
+    'language' => 'cs',
+    'promote' => 0,
+    'status' => 0,
+    'comment' => 0,
+    'path' => "souteze/".$node->slug."/".$node->year."/odeslani",
+    'webform' => array(
+        'confirmation' => '<p>Děkujeme za zaslání fotky. Soutěž potrvá do <strong>XX. XX XXXX</strong>.</p>',
+        'confirmation_format' => 1,
+        'redirect_url' => '<confirmation>',
+        'status' => '1',
+        'block' => '0',
+        'teaser' => '0',
+        'allow_draft' => '0',
+        'auto_save' => '0',
+        'submit_notice' => '1',
+        'submit_text' => 'Odeslat fotku',
+        // Users can only submit once how many kittens they want.
+        'submit_limit' => '-1',
+        'submit_interval' => '-1',
+        'total_submit_limit' => '2',
+        'total_submit_interval' => '-1',
+        'record_exists' => TRUE,
+        'roles' => array(
+          // Only authenticated users can submit this webform.
+          0 => '2',
+        ),
+        'emails' => array(),
+        // Here comes our $components array.
+        'components' => $components,
+      ),
+  );
+   if ( $n = node_submit( $n ) ) {
+      node_save( $n );
+      drupal_set_message("Vytvořen formulář ".$n->title.".");
+  } else
+      drupal_set_message("Node ".$node->title." added incorrectly", "error");
+  return $n;
 }
 
 function afcontest_add_new($node) {
   // create FTP dir
-  //mkdir($_SERVER['DOCUMENT_ROOT'].base_path().'sites/default/files/webform/'.$node->slug);
+  $file_save_dir = $node->slug.$node->year;
+  mkdir($_SERVER['DOCUMENT_ROOT'].base_path().'sites/default/files/webform/'.$file_save_dir);
 
-  $submission_form_url = "/souteze/submitXXX";
+  $form_node = afcontest_create_submit_form($file_save_dir, $node);
 
   // create dummy page
   $title_page = array(
     'title' => $node->title,
+    'language' => 'cs',
     'type' => 'page',
     'promote' => 0,
     'status' => 0,
+    'comment' => 0,
     'format' => 3,
+    'uid' => $node->uid,
     'body' => '
 
     <center>
@@ -94,7 +165,7 @@ function afcontest_add_new($node) {
     <li>maximální rozměry jsou 1024x768, povolené formáty JPG a PNG</li>
     <li>příspěvky můžete posílat do <strong>10. dubna 2012</strong></li>
 </ul>
-<p class="links"><a href="'.$submission_form_url.'">Odeslat fotku</a></p><p>&nbsp;</p>
+<p class="links"><a href="'.$form_node->path.'">Odeslat fotku</a></p><p>&nbsp;</p>
 <h3>Co můžete vyhrát?</h3>
 <p>popis cen...</p>
 '
@@ -105,17 +176,14 @@ function afcontest_add_new($node) {
   );  
   if ( $title_page = node_submit( $title_page ) ) {
       node_save( $title_page );
-      $title_page_nid = $title_page->nid;
       drupal_set_message("Vytvořena stránka ".$node->title.".");
   } else
       drupal_set_message("Node ".$node->title." added incorrectly", "error");
 
   // create entry submission form
 
-  return array(
-    'title_page' => $title_page_nid,
-    'submit_form' => $submit_form_nid
-  );
+  db_query('UPDATE {afcontest} SET title_page = %d, submit_form = %d  WHERE nid = %d', $title_page->nid, $form_node->nid, $node->nid);
+
 }
 
 /**
@@ -143,9 +211,14 @@ function afcontest_delete($node) {
 function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   global $user;
 
-  $confs = afcontest_add_new( $node );
+  //$form1 = node_load($node->title_page);
+  //$form2 = node_load($node->submit_form);
+  //print_r($form1);
+  //print_r($form2);
 
-  if ( $_GET['action'] == "create_voting" ) {
+  if ( $_GET['action'] == "init" ) {
+      $node = afcontest_add_new( $node );
+  } else if ( $_GET['action'] == "create_voting" ) {
       $node = afcontest_create_voting( $node );
   } else if ( $_GET['action'] == "create_results" ) {
       $node = afcontest_create_results( $node );
@@ -153,9 +226,13 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
 
   $output = '<p>Název: '.$node->title.'</br>Rok: '.$node->year.'</br>Slug: '.$node->slug.'</p>';
 
-  $url_title_page = url('node/'.$node->title_page, array('absolute'=>TRUE));
+  $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
+
+  //$url_title_page = url('node/'.$node->title_page, array('absolute'=>TRUE));
+  $url_title_page = '/souteze/'.$node->slug.'/'.$node->year; // vytvori alias, ale nezmeni vlastnost samotneho node-u
   $output .= '<h3>Titulní stránka: <a href="'.$url_title_page.'">'.$url_title_page.'</a></h3>';
-  $url_submit_form = url('node/1507', array('absolute'=>TRUE));
+  //$url_submit_form = url('node/'.$node->submit_form, array('absolute'=>TRUE));
+  $url_submit_form = "/souteze/".$node->slug."/".$node->year."/odeslani";
   $output .= '<h3>Formulář pro odesílání příspěvků: <a href="'.$url_submit_form.'">'.$url_submit_form.'</a></h3>';
   
   $output .= '<p class="links"><a href="?action=create_voting">Vytvořit galerii z příspěvků a hlasovací formulář</a></p>';
@@ -170,7 +247,7 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
 
   $output .= print_r($node, true);
-  $output .= print_r($confs, true);
+  //$output .= print_r($confs, true);
 
   $node->content['body'] = array(
     '#value' => $output
