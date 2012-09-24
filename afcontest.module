@@ -69,13 +69,36 @@ function afcontest_add_new($node) {
   // create FTP dir
   //mkdir($_SERVER['DOCUMENT_ROOT'].base_path().'sites/default/files/webform/'.$node->slug);
 
+  $submission_form_url = "/souteze/submitXXX";
+
   // create dummy page
   $title_page = array(
     'title' => $node->title,
     'type' => 'page',
     'promote' => 0,
     'status' => 0,
-    'body' => 'kokodaaak',
+    'format' => 3,
+    'body' => '
+
+    <center>
+        <p><img alt="'.$node->title.'" src="/sites/default/files/FestovniVajicka.png " style="width: 583px; height: 136px; " /></p>
+</center>
+<p>Motivační text k soutěži....</p>
+<h3>O co jde?</h3>
+<p>podrobnější popis</p>
+<h3>Pravidla</h3>
+<ul>
+    <li>do soutěže můžete zaslat maximálně 2 fotky</li>
+    <li>musíte být autorem díla a fotky (fotku ale může zaslat pouze jeden ze spoluautorů)</b></li>
+    <li>nesmí se jednat o fotomontáž, korekce jasu a ořezy jsou povoleny</li>
+    <li>maximální rozměry jsou 1024x768, povolené formáty JPG a PNG</li>
+    <li>příspěvky můžete posílat do <strong>10. dubna 2012</strong></li>
+</ul>
+<p class="links"><a href="'.$submission_form_url.'">Odeslat fotku</a></p><p>&nbsp;</p>
+<h3>Co můžete vyhrát?</h3>
+<p>popis cen...</p>
+'
+    ,
     'name' => $node->title,
     'path' => 'souteze/'.$node->slug.'/'.$node->year // vytvori alias, ale nezmeni vlastnost samotneho node-u
     // TODO - nenechat vytvorit alias, ale zmenit primo u node-u
