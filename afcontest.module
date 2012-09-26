@@ -201,6 +201,49 @@ function afcontest_delete($node) {
   db_query("DELETE FROM {afcontest} WHERE nid = %d", $node->nid);
 }
 
+function afcontest_add_gallery( $node ) {
+
+  $n = array(
+    'type' => 'album',
+    'uid' => $node->uid,
+    'title' => $node->title." ".$node->year." - Galerie",
+    'name' => $node->title." ".$node->year." - Galerie",
+    'language' => 'cs',
+    'promote' => 0,
+    'format' => 1,
+    'status' => 0,
+    'comment' => 0,
+    'path' => "souteze/".$node->slug."/".$node->year."/galerie",
+    'webform' => array(
+    )
+  );
+   if ( $n = node_submit( $n ) ) {
+      node_save( $n );
+      drupal_set_message("Vytvořena galerie ".$n->title.".");
+  } else
+      drupal_set_message("Node ".$node->title." added incorrectly", "error");
+  return $n;
+
+  // ? see gallerix_process_file
+  // management.inc > see gallerix_add_pictures_form_submit
+}
+
+function afcontest_create_voting( $node ) {
+    // db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
+
+    // create node gallery node
+    afcontest_add_gallery( $node );
+
+    // add image
+
+    return $node;
+}
+
+function afcontest_create_results( $node ) {
+    return $node;
+}
+
+
 /**
  * Implementation of hook_view().
  *
@@ -211,6 +254,7 @@ function afcontest_delete($node) {
 function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   global $user;
 
+  //$form1 = node_load(1434);
   //$form1 = node_load($node->title_page);
   //$form2 = node_load($node->submit_form);
   //print_r($form1);
@@ -253,15 +297,6 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
     '#value' => $output
   );
   return $node;
-}
-
-function afcontest_create_voting( $node ) {
-    db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
-    return $node;
-}
-
-function afcontest_create_results( $node ) {
-    return $node;
 }
 
 /*
