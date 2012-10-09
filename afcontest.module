@@ -201,8 +201,43 @@ function afcontest_delete($node) {
   db_query("DELETE FROM {afcontest} WHERE nid = %d", $node->nid);
 }
 
-function afcontest_add_gallery( $node ) {
+function afcontest_get_submission_files( $form_nid ) {
+  $query = 'SELECT s.*, sd.cid, sd.no, sd.data, u.name, u.status, f.filename, f.filepath '.
+           'FROM {webform_submissions} s '.
+           'LEFT JOIN {webform_submitted_data} sd ON sd.sid = s.sid '.
+           'LEFT JOIN {users} u ON u.uid = s.uid '.
+           'LEFT JOIN {files} f ON sd.data = f.fid '.
+           'WHERE sd.nid = %d';
+  $query .= ' ORDER BY sid ASC, cid ASC, no ASC';
+  $res = db_query($query, $form_nid );
 
+  $files = array();
+  while ($row = db_fetch_object($res)) {
+      $files[] = $row;   
+  }
+
+  return $files;
+}
+
+function afcontest_copy_files_to_gallery( $form_nid, $gallery_nid ) {
+   $album = db_fetch_object(db_query("SELECT path FROM {gallerix_albums} WHERE nid = %d", $gallery_nid));
+   $album_path = $_SERVER['DOCUMENT_ROOT'].base_path().$album->path."/original/";
+
+   $files = afcontest_get_submission_files( $form_nid );
+   foreach ( $files as $k=>$v ) {
+       // zkopirovat soubory do adresare galerie
+       $filename = sprintf("%03d_%s_%s", $k, $v->name, pathinfo( $v->filename, PATHINFO_BASENAME ) );
+       copy( 
+         $_SERVER['DOCUMENT_ROOT'].base_path().$v->filepath,
+         $album_path.$filename
+       );
+       // pridat zaznamy do tabulky alba 
+       // TODO
+   }
+
+}
+
+function afcontest_add_gallery( $node ) {
   $n = array(
     'type' => 'album',
     'uid' => $node->uid,
@@ -259,6 +294,11 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   //$form2 = node_load($node->submit_form);
   //print_r($form1);
   //print_r($form2);
+    
+  //print_r( afcontest_get_submission_files( 1534 ) );
+  afcontest_copy_files_to_gallery( 1534, 1536 );
+
+  // gallery labels XXX: nick
 
   if ( $_GET['action'] == "init" ) {
       $node = afcontest_add_new( $node );
