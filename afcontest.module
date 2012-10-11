@@ -66,6 +66,8 @@ function afcontest_insert($node) {
   afcontest_add_new( $node );
 }
 
+// ------ PHASE 0 --- CREATE SUBMISSION FORM AND TITLE PAGE -----------------------------------------------------------
+
 function afcontest_create_submit_form($file_save_dir, $node) {
   $components = array();
   $components[1] = array(
@@ -201,6 +203,36 @@ function afcontest_delete($node) {
   db_query("DELETE FROM {afcontest} WHERE nid = %d", $node->nid);
 }
 
+// ------ PHASE 1 --- STOP SUBMISSION FORM, CREATE GALLERY FROM SUBMITTED PICTURES -----------------------------------------------------------
+
+function afcontest_stop_form( $form_nid ) {
+    db_query('UPDATE {webform} SET status = 0 WHERE nid = %d', $form_nid);
+}
+
+function afcontest_add_gallery( $node ) {
+  $n = array(
+    'type' => 'album',
+    'uid' => $node->uid,
+    'title' => $node->title." ".$node->year." - Galerie",
+    'name' => $node->title." ".$node->year." - Galerie",
+    'language' => 'cs',
+    'promote' => 0,
+    'format' => 1,
+    'status' => 0,
+    'comment' => 0,
+    'path' => "souteze/".$node->slug."/".$node->year."/galerie",
+    'webform' => array(
+    )
+  );
+   if ( $n = node_submit( $n ) ) {
+      $n->uid = $node->uid;
+      node_save( $n );
+      drupal_set_message("Vytvořena galerie ".$n->title.".");
+  } else
+      drupal_set_message("Node ".$node->title." added incorrectly", "error");
+  return $n;
+}
+
 function afcontest_get_submission_files( $form_nid ) {
   $query = 'SELECT s.*, sd.cid, sd.no, sd.data, u.name, u.status, f.filename, f.filepath '.
            'FROM {webform_submissions} s '.
@@ -229,58 +261,45 @@ function afcontest_copy_files_to_gallery( $form_nid, $gallery_node ) {
    $uid = strval($gallery_node->uid*1);
    foreach ( $files as $k=>$v ) {
        // zkopirovat soubory do adresare galerie
-       $filename = sprintf("%03d_%s_%s", $k, $v->name, pathinfo( $v->filename, PATHINFO_BASENAME ) );
+       $filename = sprintf("%03d_%s_%s", ($k+1), $v->name, pathinfo( $v->filename, PATHINFO_BASENAME ) );
        copy( 
          $_SERVER['DOCUMENT_ROOT'].base_path().$v->filepath,
          $album_path.$filename
        );
        // pridat zaznamy do tabulky alba 
        db_query("INSERT INTO {gallerix_pictures} (nid, uid, path, name, caption, original_name, created, added, built ) VALUES (%d, %d, '%s', '%s', '%s', '%s', %d, %d, %d)", 
-           $gallery_node->nid, $uid, substr($album->path,1)."/original/".$filename, $filename, str_pad($k,3,"0",STR_PAD_LEFT).": ".$v->name, $filename, $timestamp, $timestamp, 0 );
+           $gallery_node->nid, $uid, substr($album->path,1)."/original/".$filename, $filename, str_pad($k+1,3,"0",STR_PAD_LEFT).": ".$v->name, $filename, $timestamp, $timestamp, 0 );
 
-       $submissions[ $k ] = $v->name;
+       $submissions[ $k+1 ] = $v->name;
    }
 
    return $submissions;
 }
 
-function afcontest_add_gallery( $node ) {
-  $n = array(
-    'type' => 'album',
-    'uid' => $node->uid,
-    'title' => $node->title." ".$node->year." - Galerie",
-    'name' => $node->title." ".$node->year." - Galerie",
-    'language' => 'cs',
-    'promote' => 0,
-    'format' => 1,
-    'status' => 0,
-    'comment' => 0,
-    'path' => "souteze/".$node->slug."/".$node->year."/galerie",
-    'webform' => array(
-    )
-  );
-   if ( $n = node_submit( $n ) ) {
-      node_save( $n );
-      drupal_set_message("Vytvořena galerie ".$n->title.".");
-  } else
-      drupal_set_message("Node ".$node->title." added incorrectly", "error");
-  return $n;
-
-  // ? see gallerix_process_file
-  // management.inc > see gallerix_add_pictures_form_submit
-}
-
-function afcontest_create_voting( $node ) {
-    // db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
+function afcontest_create_gallery( $node ) {
+    afcontest_stop_form( $node->submit_form );
 
     // create node gallery node
     $gnode = afcontest_add_gallery( $node );
 
-    // add image
-    //afcontest_copy_files_to_gallery( $node->submit_form, $gnode->nid );
+    // copyt & add submitted images to new gallery
+    afcontest_copy_files_to_gallery( $node->submit_form, $gnode );
+
+    db_query('UPDATE {afcontest} SET gallery = %d WHERE nid = %d', $gnode->nid, $node->nid);
 
     return $node;
 }
+
+// ------ PHASE 2 --- PREPARE VOTING FROM MODERATED GALLERY -----------------------------------------------------------------------------
+
+function afcontest_create_voting( $node ) {
+    // db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
+
+
+    return $node;
+}
+
+// ------ PHASE 3 --- STOP VOTING, COUNT VOTES, REORDER GALLERY -----------------------------------------------------------------------------
 
 function afcontest_create_results( $node ) {
     return $node;
@@ -297,23 +316,15 @@ function afcontest_create_results( $node ) {
 function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   global $user;
 
-  //$form1 = node_load(1434);
-  //$form1 = node_load($node->title_page);
-  //$form2 = node_load($node->submit_form);
-  //print_r($form1);
-  //print_r($form2);
-  $gnode = node_load(1536);
-    
-  //print_r( afcontest_get_submission_files( 1534 ) );
-  $submissions = afcontest_copy_files_to_gallery( 1534, $gnode );
-
-
-  //TODO vyzkouset, jestli se spravne prida zaznam kazdeho obrazku do tabulky gallerix_pictures
-
-  // gallery labels XXX: nick
+  if ( $node->comment > 0 ) {
+      $node->comment = 0;
+      node_save( $node );
+  }
 
   if ( $_GET['action'] == "init" ) {
       $node = afcontest_add_new( $node );
+  } else if ( $_GET['action'] == "create_gallery" ) {
+      $node = afcontest_create_gallery( $node );
   } else if ( $_GET['action'] == "create_voting" ) {
       $node = afcontest_create_voting( $node );
   } else if ( $_GET['action'] == "create_results" ) {
@@ -322,29 +333,51 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
 
   $output = '<p>Název: '.$node->title.'</br>Rok: '.$node->year.'</br>Slug: '.$node->slug.'</p>';
 
-  $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
+  $phase = -1;
+  if ( $node->title_page == 0 ) {
+      $phase = 0;
+  } else if ( $node->gallery == 0 ) {
+      $phase = 1;
+  } else if ( $node->vote_form == 0 ) {
+      $phase = 2;
+  } else if ( $node->results_page == 0 ) {
+      $phase = 3;
+  } else
+      $phase = 4;
 
-  //$url_title_page = url('node/'.$node->title_page, array('absolute'=>TRUE));
-  $url_title_page = '/souteze/'.$node->slug.'/'.$node->year; // vytvori alias, ale nezmeni vlastnost samotneho node-u
-  $output .= '<h3>Titulní stránka: <a href="'.$url_title_page.'">'.$url_title_page.'</a></h3>';
-  //$url_submit_form = url('node/'.$node->submit_form, array('absolute'=>TRUE));
-  $url_submit_form = "/souteze/".$node->slug."/".$node->year."/odeslani";
-  $output .= '<h3>Formulář pro odesílání příspěvků: <a href="'.$url_submit_form.'">'.$url_submit_form.'</a></h3>';
-  
-  $output .= '<p class="links"><a href="?action=create_voting">Vytvořit galerii z příspěvků a hlasovací formulář</a></p>';
+  //$output .= "<p>phase: ".$phase."</p>";
 
-  $url_gallery = url('node/1507', array('absolute'=>TRUE));
-  $output .= '<h3>Galerie: <a href="'.$url_gallery.'">'.$url_gallery.'</a></h3>';
-  $url_vote_form = url('node/1507', array('absolute'=>TRUE));
-  $output .= '<h3>Hlasovací formulář: <a href="'.$url_vote_form.'">'.$url_vote_form.'</a></h3>';
+  if ( $phase <= 0 ) {
+      $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
+  } else {
+      $url_title_page = '/souteze/'.$node->slug.'/'.$node->year; // vytvori alias, ale nezmeni vlastnost samotneho node-u
+      $output .= '<h3>Titulní stránka: <a href="'.$url_title_page.'">'.$url_title_page.'</a></h3>';
+      $url_submit_form = "/souteze/".$node->slug."/".$node->year."/odeslani";
+      $output .= '<h3>Formulář pro odesílání příspěvků: <a href="'.$url_submit_form.'">'.$url_submit_form.'</a></h3>';
 
-  $output .= '<p class="links"><a href="?action=create_results">Vytvořit stránku výsledků, srovnat galerii podle výsledků</a></p>';
-  $url_results_page = url('node/1507', array('absolute'=>TRUE));
-  $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
+      if ( $phase <= 1 ) {
+         $output .= '<p class="links"><a href="?action=create_gallery">Stopnout příjem příspěvků a vytvořit z nich galerii</a></p>';
+      } else {
+         $url_gallery = "/souteze/".$node->slug."/".$node->year."/galerie";
+         $output .= '<h3>Galerie: <a href="'.$url_gallery.'">'.$url_gallery.'</a></h3>';
 
-  $output .= print_r($node, true);
-  $output .= print_r($submissions, true);
-  //$output .= print_r($confs, true);
+         if ( $phase <= 2 ) {
+            $output .= '<p class="links"><a href="?action=create_voting">Vytvořit podle galerie hlasovací formulář</a></p>';
+         } else {
+            $url_vote_form = "/souteze/".$node->slug."/".$node->year."/hlasovani";
+            $output .= '<h3>Hlasovací formulář: <a href="'.$url_vote_form.'">'.$url_vote_form.'</a></h3>';
+
+            if ( $phase <= 3 ) {
+                $output .= '<p class="links"><a href="?action=create_results">Stopnout hlasování, srovnat galerii podle výsledků, vytvořit stránku výsledků</a></p>';
+            } else {
+                $url_results_page = "/souteze/".$node->slug."/".$node->year."/vysledky";
+                $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
+            }
+         }
+      }
+  }
+
+  //$output .= print_r($node, true);
 
   $node->content['body'] = array(
     '#value' => $output
@@ -352,473 +385,3 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   return $node;
 }
 
-/*
-function funsub_menu() {
-  $contest_ids = array( "2009", "2010", "2011" );
-
-  foreach ( $contest_ids as $contest_id ) {
-	  $items['souteze/funsub/'.$contest_id.'/playlist'] = array(
-		'title' => 'FunSub '.$contest_id.' - playlist',
-		'page callback' => 'funsub_playlist',
-		'page arguments' => array( $contest_id ),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );
-	  $items['souteze/funsub/'.$contest_id.'/video'] = array(
-		'title' => 'FunSub '.$contest_id.' - přehled titulků',
-		'page callback' => 'funsub_video_all',
-		'page arguments' => array( $contest_id ),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );
-$items['souteze/funsub/'.$contest_id.'/results'] = array(
-		'title' => 'FunSub '.$contest_id.' - výsledky',
-		'page callback' => 'funsub_video_results',
-		'page arguments' => array( $contest_id ),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );		
-	  $items['souteze/funsub/'.$contest_id.'/video/%user'] = array(
-		'title' => 'FunSub '.$contest_id.' - přehled titulků',
-		'page callback' => 'funsub_video_user',
-		'page arguments' => array(4, $contest_id),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );
-	  $items['souteze/funsub/'.$contest_id.'/titulky'] = array(
-		'title' => 'FunSub '.$contest_id.' - překlad',
-		'page callback' => 'funsub_titulky',
-		'page arguments' => array($contest_id),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );
-	  $items['souteze/funsub/'.$contest_id.'/odeslat'] = array(
-		'title' => 'FunSub '.$contest_id.' - odeslat titulky',
-		'page callback' => 'funsub_odeslat',
-		'page arguments' => array($contest_id),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );
-
-	  $items['souteze/funsub/'.$contest_id.'/ulozit'] = array(
-		'title' => 'Ulozit titulky',
-		'page callback' => 'funsub_ulozit',
-		'page arguments' => array($contest_id),
-		'type' => MENU_CALLBACK,
-		'access arguments' => array('access content'),
-	  );	
-  }
-
-  return $items;
-}
-
-function funsub_config( $contest_id ) {
-  $config = array();
-  
-  $contest_info = array(
-		"2009" => array (
-			"funsubs" => array (
-				"1" => array('id'=>'funsub01-slayers', 'name'=>'Slayers'),
-				"2" => array('id'=>'funsub02-inuyasha', 'name'=>'Inuyasha'),
-				"3" => array('id'=>'funsub03-fumoffu', 'name'=>'FMP: Fumoffu'),
-				"4" => array('id'=>'funsub04-bebop', 'name'=>'Cowboy Bebop'),
-				"5" => array('id'=>'funsub05-dn', 'name'=>'Death Note')
-			),
-			"form_id" => "144"
-		),
-		"2010" => array (
-			"funsubs" => array (
-				"1" => array('id'=>'funsub01-utena', 'name'=>'Utena'),
-				//"2" => array('id'=>'funsub02-escaflowne', 'name'=>'Escaflowne'),
-				//"3" => array('id'=>'funsub03-nyankoi', 'name'=>'Nyan Koi!'),
-				"2" => array('id'=>'funsub04-kor', 'name'=>'Kimagure Orange Road'),
-				"3" => array('id'=>'funsub05-toradora', 'name'=>'Toradora!'),
-				"4" => array('id'=>'funsub06-tenshi', 'name'=>'Tenshi Ni Narumon'),
-				"5" => array('id'=>'funsub08-ouran', 'name'=>'Ouran High School Host Club')
-			),
-			"form_id" => "531",
-			"voting_form_id" => "590"
-		),
-		"2011" => array (
-			"funsubs" => array (
-				"1" => array('id'=>'funsub01-higurashi', 'name'=>'Higurashi No Naku Koro Ni'),
-				"2" => array('id'=>'funsub02-ikamusume', 'name'=>'Ika Musume'),
-				"3" => array('id'=>'funsub03-kurage', 'name'=>'Kuragehime'),
-				"4" => array('id'=>'funsub04-todoke', 'name'=>'Kimi Ni Todoke'),
-				"5" => array('id'=>'funsub05-zero', 'name'=>'Zero No Tsukaima')
-			),
-			"form_id" => "943",
-			"voting_form_id" => "997"
-		)
-  );
-  
-	$config = $contest_info[ $contest_id ];
-	$config['current'] = '2012';
-	
-  $config['source_path'] = '/sites/default/files/funsub/'.$contest_id.'/source/';
-  $config['subs_path'] = '/sites/default/files/funsub/'.$contest_id.'/subs/';
-  $config['base'] = '/home/www/animefest.cz/www';
-  return $config;
-}
-
-// prehravace s titulky konkretniho uzivatele
-function funsub_video_user($user, $contest_id) {
-  $config = funsub_config( $contest_id );
-  if (is_numeric($user)) $user = user_load($user);
-  $output = '<h3>Titulky uživatele '.$user->name.'</h3>';
-  
-  foreach($config['funsubs'] as $video_info) {
-    $video = $config['source_path'].$video_info['id'].".mp4";
-    $subs = $config['subs_path'].'user'.$user->uid.'-'.$video_info['id'].'.xml';
-    //$output .= 'subs='.$subs;
-    if (file_exists($config['base'].$subs)) {
-      $output .= '<h4>'.$video_info['name'].'</h4>';
-      $output .= '[video src="'.$video.'" subs="'.$subs.'" ]';
-    }
-  }
-
-  return bbcode_filter('process', 0, -1, $output);
-}
-
-// prehravace s titulky vsech uzivatelu
-function funsub_video_all( $contest_id, $data_only = false ) {
-  //return '<p>Tady nic zajímavého není. <a href="/souteze/funsub">FunSub</a></p>';
-	$config = funsub_config( $contest_id );
-  $output = '<h3>Všechna videa</h3>';
-	
-	$query = 'SELECT s.*, sd.cid, sd.no, sd.data, u.name, u.mail, u.status '.
-           'FROM {webform_submissions} s '.
-           'LEFT JOIN {webform_submitted_data} sd ON sd.sid = s.sid '.
-           'LEFT JOIN {users} u ON u.uid = s.uid '.
-           'WHERE sd.nid = %d';
-  $query .= ' ORDER BY sid ASC, cid ASC, no ASC';
-
-  $res = db_query($query, $config['form_id'] );
-  $submissions = array();
-  $previous = array();
-
-	$maxsid = 0;  
-  while ($row = db_fetch_object($res)) {
-		if ($maxsid < $row->sid)
-			$maxsid = $row->sid;
-    if ($row->sid != $previous) {
-      $submissions[$row->sid] = new stdClass();
-      //$submissions[$row->sid]->sid = $row->sid;
-      $submissions[$row->sid]->uid = $row->uid;
-      $submissions[$row->sid]->name = $row->name;
-    }
-    $submissions[$row->sid]->data[$row->cid]['value'][$row->no] = $row->data;
-    $previous = $row->sid;
-  }
-
-	//$output.= print_r( $submissions ,true);
-	
-	// Rucne vlozene prispevky
-    
-	$injects = array(
-	);
-	
-	foreach ($injects as $inject) {
-		$submission = new stdClass();
-		$submission->uid = $inject['uid'];
-		$submission->name = $inject['name'];
-		$submission->data = array();
-		foreach ($inject['subs'] as $sub) {
-			$submission->data[$sub] = array("value"=>array("pridat"));
-		}		
-		$maxsid++;
-		$submissions[$maxsid] = $submission;
-	}
-	
-	
-	$list = "";
-	$xml = '<playlist version="1" xmlns="http://xspf.org/ns/0/"><title>Funsub hlasování</title><tracklist>';
-	$id = 1;
-	$data = array();
-	
-	foreach ($submissions as $submission) {		
-		foreach ( $submission->data as $subid=>$subtitle ) {
-		  $data[$id] = array($subid,$submission);
-			
-			$list .= $id."|".$id.": ".$submission->name." - ".$config['funsubs'][$subid]['name']."<br />";
-			
-			$xml .= sprintf("<track><title>%s</title><location>%s</location><image>%s</image><meta rel='captions'>%s</meta></track> ",
-				$id,
-				$config['source_path'].$config['funsubs'][$subid]['id'].".mp4",
-				$config['source_path'].$config['funsubs'][$subid]['id'].".jpg",
-				$config['subs_path']."user".$submission->uid."-".$config['funsubs'][$subid]['id'].".xml"
-			);
-			$id++;
-		}		
-	}
-	
-	if ($data_only) return $data;
-	
-	$xml.= "</tracklist></playlist>";
-	$output.= $list;
-	$output.= htmlspecialchars($xml);
-	
-  return $output;
-}
-
-// playlist vyhravajicich videi
-function funsub_video_results( $contest_id ) {
-  //return '<p>Tady nic zajímavého není. <a href="/souteze/funsub">FunSub</a></p>';
-	$config = funsub_config( $contest_id );
-  $output = '<h3>Všechna videa</h3>';
-	
-	$query = 'SELECT s.*, sd.cid, sd.no, sd.data, u.name, u.mail, u.status '.
-           'FROM {webform_submissions} s '.
-           'LEFT JOIN {webform_submitted_data} sd ON sd.sid = s.sid '.
-           'LEFT JOIN {users} u ON u.uid = s.uid '.
-           'WHERE sd.nid = %d';
-  $query .= ' ORDER BY sid ASC, cid ASC, no ASC';
-	
-  $res = db_query($query, $config['voting_form_id'] );
-  $vote_submissions = array();
-  $previous = -1;
-  while ($row = db_fetch_object($res)) {
-    if ($row->sid != $previous) {
-      $vote_submissions[$row->sid] = new stdClass();
-      $vote_submissions[$row->sid]->uid = $row->uid;
-      $vote_submissions[$row->sid]->name = $row->name;
-    }
-    $vote_submissions[$row->sid]->data[$row->cid]['value'][$row->no] = $row->data;
-    $previous = $row->sid;
-  }
-	
-    $submissions = funsub_video_all( $contest_id, true );
-    $submission_count = count($submissions);
-	$score = array();
-	for ($i=1;$i<$submission_count;$i++) $score[$i] = 0;
-	foreach ($vote_submissions as $submission) {		
-	  $data = $submission->data;
-	  $score[$data[1]['value'][0]] += 3;
-	  $score[$data[2]['value'][0]] += 2;
-	  $score[$data[3]['value'][0]] += 1;
-	}
-
-    $places = array(); 
-	foreach ($score as $id=>$points) {
-		if ( !$places[$points] )
-			$places[$points] = array();
-		$places[$points][] = $id;		
-	}
-	krsort( $places );
-	
-	$xml = '<playlist version="1" xmlns="http://xspf.org/ns/0/"><title>Funsub hlasování</title><tracklist>';
-	$place = 1;	
-	foreach ($places as $points=>$places ) {
-		foreach ( $places as $p ) {		  
-		  $subid = $submissions[$p][0];
-		  $subdata = $submissions[$p][1];
-			$xml .= sprintf("<track><title>%s</title><annotation>%s</annotation>\n  <location>%s</location>\n  <meta rel='captions'>%s</meta>\n</track> ",
-				$place.(count($places)>1?". - ".($place+count($places)-1).".":".")." místo: ".$subdata->name,
-				$config['funsubs'][$subid]['name']." (".$points." bodů)",
-				$config['source_path'].$config['funsubs'][$subid]['id'].".mp4",
-				$config['subs_path']."user".$subdata->uid."-".$config['funsubs'][$subid]['id'].".xml"
-			);
-		}
-		$place+=count($places);
-	}
-	
-	//$output.= count($submissions)." ".print_r( $submissions ,true);
-	
-	$xml.= "</tracklist></playlist>";
-	$output.= htmlspecialchars($xml);
-	
-  return $output;
-}
-
-// XML playlist vsech titulku
-function funsub_playlist( $contest_id ) {
-  global $video_count;
-	$config = funsub_config( $contest_id );
-  $output = '<playlist version="1" xmlns="http://xspf.org/ns/0/"> 
-	<title>Funsub ukázky</title>  
-	<tracklist> ';
-
-  $video_count = 0;
-  $result = db_query("SELECT DISTINCT(uid) FROM {webform_submissions} WHERE nid=%d ORDER BY sid", $config['form_id']);
-  while ($u = db_fetch_object($result)) {
-    $output .= funsub_playlist_user($u->uid, $contest_id );
-  }
-
-  $output .= '</tracklist> 
-</playlist>';
-  return $output;
-}
-
-// XML playlist s titulky konkretniho uzivatele
-function funsub_playlist_user($user, $contest_id) {
-  global $video_count;
-  $config = funsub_config( $contest_id );
-  $cid[2] = 'funsub01-slayers';
-  $cid[3] = 'funsub02-inuyasha';
-  $cid[4] = 'funsub04-bebop';
-  $cid[5] = 'funsub05-dn';
-  $cid[6] = 'funsub03-fumoffu';
-  $title[2] = 'Slayers';
-  $title[3] = 'Inuyasha';
-  $title[4] = 'Cowboy Bebop';
-  $title[5] = 'Death Note';
-  $title[6] = 'FMP Fumoffu';
-  if (is_numeric($user)) $user = user_load($user);
-
-  $output = '';
-  $result = db_query("SELECT d.sid, d.cid FROM {webform_submissions} AS s, {webform_submitted_data} AS d WHERE s.nid=%d AND s.uid=%d AND s.sid=d.sid ORDER BY d.cid", $config['form_id'], $user->uid);
-  while ($u = db_fetch_object($result)) {
-    $video_count++;
-    $video = $config['source_path'].$cid[$u->cid].'.flv';
-    $subs = $config['subs_path'].'user'.$user->uid.'-'.$cid[$u->cid].'.xml';
-    $output .= '<track>';
-    $output .= '<title>'.$video_count.': '.$user->name.'</title>';
-    $output .= '<annotation>'.$title[$u->cid].'</annotation>';
-    $output .= '<location>'.$video.'</location>';
-    $output .= '<meta rel="captions">'.$subs.'</meta>';
-    $output .= '</track>';
-    $pocet+=1;
-  }
-
-  return $output;
-}
-
-// Stranka s editory titulku pro aktualniho uzivatele
-function funsub_titulky( $contest_id ) {
-  global $user;
-  $config = funsub_config($contest_id);
-
-  if (!($user->uid)) {
-    $output = 'Překládat mohou jen <a href="/user/login">přihlášení uživatelé</a>.';
-    return $output;
-  }
-
-	if ( $config['current'] != $contest_id ) {
-		$output = '<p>Příjem titulků do soutěže byl ukončen. Můžeš se jen podívat, jak vypadají <a href="/souteze/funsub/'.$contest_id.'/odeslat">tvoje titulky</a>.';
-		return $output;
-	}
-		
-  $odeslano = funsub_odeslano($contest_id);
-	
-  if ($odeslano) {
-    $output = '<p>Už jsi titulky odeslal/a, můžeš se jen podívat, jak vypadá <a href="/souteze/funsub/'.$contest_id.'/odeslat">výsledek</a>.</p>';
-    return $output;
-  }
-
-  $output = '<div class="node"><div class="content">';
-  $output .= '<b>Jak na to:</b><br/>';
-  $output .= '<ul> <li>vyberte si libovolnou ukázku - každá je vložena v jednom editoru titulků</li>';
-  $output .= '<li>vložte titulky do příslušných řádků vpravo</li>'; 
-  $output .= '<li>uložte kliknutím na ikonku diskety</li> </ul>';  
-  $output .= '<div class="links inline gray"> <a class href="/souteze/funsub/'.$contest_id.'/odeslat">Moje titulky</a> (náhled a odeslání)</div>';
-		
-  foreach($config['funsubs'] as $video_info) {
-    $video = $config['source_path'].$video_info['id'].".mp4";		
-    $subtitle_id = 'user'.$user->uid.'-'.$video_info['id'].'.xml';
-    $user_file = $config['subs_path'].$subtitle_id;
-    if (file_exists($config['base'].$user_file)) {
-      $subs = $user_file;
-    } else {
-			$subs = $config['source_path'].$video_info['id'].".xml";
-    }
-    $subs .= "?".rand(0,1000);
-    $output .= '<h3>'.$video_info['name'].':</h3>';    
-		$editor_params = 'file='.$video.'&subs='.$subs.'&w=580&h=300&save=/souteze/funsub/'.$contest_id.'/ulozit&subid='.$subtitle_id;
-		$editor_params .= "&image=".$config['source_path'].$video_info['id'].".jpg&ienobaka=tru";
-		// IE nezobrazi flash, pokud konci parametry nejakou priponou - .xml, .jpg atd
-		$output .= '<object width="580" height="300"><param name="movie" value="/sites/default/files/funsub/editor.swf?'.$editor_params.'"></param><param name="allowscriptaccess" value="always"></param><param name="wmode" value="window"></param><embed src="/sites/default/files/funsub/editor.swf?'.$editor_params.'" type="application/x-shockwave-flash" wmode="window" allowscriptaccess="always" width="580" height="300"></embed></object>';
-  }
-  $output .= '</div></div>';
-	
-	return $output;	
-}
-
-// Vyber titulku aktualniho uzivatele, ktere maji byt odeslany do souteze
-function funsub_odeslat($contest_id) {
-  global $user;
-  $config = funsub_config($contest_id);
-  $output = '';
-
-  if (!($user->uid)) {
-    $output = 'Překládat mohou jen <a href="/user/login">přihlášení uživatelé</a>.';
-    return $output;
-  }
-
-	$output .= '<div class="node"><div class="content">';
-	if ( $config['current'] == $contest_id ) {
-		$odeslano = funsub_odeslano($contest_id);
-		if ($odeslano) {
-			$output .= '<p>Tvoje titulky byly úspěšně odeslány do soutěže.</p>';
-		} else {
-			$output .= '<p>Z vytvořených titulků zaškrtněte ty, které chcete odeslat do <a href="/souteze/funsub/'.$contest_id.'/">soutěže</a>.</p>';
-			//$output .= '<p>Upravené titulky k odeslání.</p>';			
-			$output .= '<form action="/node/'.$config['form_id'].'" accept-charset="UTF-8" method="post" id="webform-client-form-'.$config['form_id'].'" enctype="multipart/form-data">';
-		}
-	} else {
-		$odeslano = true;
-	  $output .= '<p>Příjem titulků do soutěže byl ukončen, můžeš se podívat na své titulky. U každého videa najdeš kód, kterým můžeš vložit ukázku se svými titulky na svůj web.</p>';
-		$output .= '<p><em>Poznámka:</em> Zjistili jsme, že blog.cz kód videa rozbije (a jiné blogovací systémy možná taky). V tom případě můžeš přidat odkaz na stránku <a href="http://www.animefest.cz/souteze/funsub/'.$contest_id.'/video/'.$user->uid.'">http://www.animefest.cz/souteze/funsub/'.$contest_id.'/video/'.$user->uid.'</a>, na které se zobrazí všechny tvé překlady.</p>';
-	}  
-	
-  foreach($config['funsubs'] as $video_info) {
-    $video = $config['source_path'].$video_info['id'].".mp4";
-    $subs = $config['subs_path'].'user'.$user->uid.'-'.$video_info['id'].'.xml';
-    $image = $config['source_path'].$video_info['id'].'.jpg';
-    if (file_exists($config['base'].$subs)) {
-      $video_id_escaped = str_replace('-', '_', $video_info['id']);
-      $output .= '<h3>';
-      if (!$odeslano) 
-				$output .= '<label class="option"><input name="submitted['.$video_id_escaped.'][pridat]" id="edit-submitted-'.$video_info['id'].'-pridat" value="pridat" class="form-checkbox" type="checkbox"></label>';
-      $output .= $video_info['name'].':</h3>';    
-			$params = 'file='.$video.'&captions='.$subs.'&image='.$image.'&width=560&height=452';
-			$params_remote = 'file='.$video.'&captions=http://www.animefest.cz/'.$subs.'&image=http://www.animefest.cz'.$image.'&width=560&height=452';
-      $output .= '<object width="560" height="452"><param name="movie" value="/sites/default/files/player.swf?'.$params.'"></param><param name="wmode" value="transparent"></param><embed src="/sites/default/files/player.swf?'.$params.'" type="application/x-shockwave-flash" wmode="transparent" width="560" height="452"></embed></object>';
-      $output .= '</br>';
-      $output .= '<p>&#160;<input size="45" class="embedcode" onclick="this.focus();this.select();" value=\'&lt;object width="560" height="452">&lt;param name="movie" value="http://www.animefest.cz/sites/default/files/player.swf?'.$params_remote.'">&lt;param name="wmode" value="transparent">&lt;embed src="http://www.animefest.cz/sites/default/files/player.swf?'.$params_remote.'" type="application/x-shockwave-flash" wmode="transparent" width="560" height="452">&lt;/object>\' /></p>';
-      //if (!$odeslano) 
-			//		$output .= '<label class="option"><input name="submitted['.$video_name.'][pridat]" id="edit-submitted-'.$video_name.'-pridat" value="pridat" class="form-checkbox" type="checkbox"> odeslat titulky</label>';
-      //$output .= '<hr/>';
-    }
-    $output .= '<br/>';
-  }
-
-  if (!$odeslano) {
-    $output .= '<p><b>Pozor, odeslání titulků do soutěže můžete provést pouze jednou!</b></p>';
-    $output .= '<input type="hidden" value="'.drupal_get_token('webform_client_form_'.$config['form_id']).'" id="edit-webform-client-form-'.$config['form_id'].'-form-token" name="form_token" />';
-    $output .= '<input name="form_id" id="edit-webform-client-form-'.$config['form_id'].'" value="webform_client_form_'.$config['form_id'].'" type="hidden">';
-    $output .= '<input name="op" id="edit-submit" value="Odeslat" class="form-submit" type="submit">';
-    $output .= '</form>';
-  }
-  $output .= '</div></div>';
-  return $output;
-}
-
-// Ulozit jedny konkretni titulky, POSTem prichazi jejich obsah
-function funsub_ulozit($contest_id) {
-  global $user;
-  $config = funsub_config($contest_id);
-  if ($_POST['exportString'] != '' and $_POST['subID'] != '') {
-    $user_file = $config['subs_path'].$_POST['subID'];  
-    $text = $_POST['exportString'];
-    $text = strip_tags($text, '<p><div><head><tt><body>');
-    $text = '<?xml version="1.0" encoding="UTF-8"?>'."\n".$text;
-    $file = fopen($config['base'].$user_file, 'w');
-    fwrite($file, $text);
-    fclose($file);
-  }
-  
-	return "SUBS_SAVED";
-}
-
-// Zjisti, zda uz aktualni uzivatel odeslal svoje titulky
-function funsub_odeslano($contest_id) {
-  global $user;
-	$config = funsub_config($contest_id);
-  $result = db_query("SELECT COUNT(*) as pocet FROM {webform_submissions} WHERE nid=%d AND uid=%d", $config['form_id'], $user->uid);
-  while ($u = db_fetch_object($result)) {
-    $pocet = $u->pocet;
-  }
-  if ($pocet > 0) return true;
-  else return false;
-}
-*/
