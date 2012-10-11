@@ -205,10 +205,6 @@ function afcontest_delete($node) {
 
 // ------ PHASE 1 --- STOP SUBMISSION FORM, CREATE GALLERY FROM SUBMITTED PICTURES -----------------------------------------------------------
 
-function afcontest_stop_form( $form_nid ) {
-    db_query('UPDATE {webform} SET status = 0 WHERE nid = %d', $form_nid);
-}
-
 function afcontest_add_gallery( $node ) {
   $n = array(
     'type' => 'album',
@@ -277,7 +273,7 @@ function afcontest_copy_files_to_gallery( $form_nid, $gallery_node ) {
 }
 
 function afcontest_create_gallery( $node ) {
-    afcontest_stop_form( $node->submit_form );
+    db_query('UPDATE {webform} SET status = 0 WHERE nid = %d', $node->submit_form );
 
     // create node gallery node
     $gnode = afcontest_add_gallery( $node );
@@ -293,15 +289,25 @@ function afcontest_create_gallery( $node ) {
 // ------ PHASE 2 --- PREPARE VOTING FROM MODERATED GALLERY -----------------------------------------------------------------------------
 
 function afcontest_create_voting( $node ) {
-    // db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
 
+    // TODO - podle popisu obrazku v galerii (003: Borecek)  vytvorit seznam pro hlasovani
 
+    // vytvorit hlasovaci formular
+    // vlozit do nej galerii
+
+    //db_query('UPDATE {afcontest} SET vote_form = %d WHERE nid = %d', $fnode->nid, $node->nid);
     return $node;
 }
 
 // ------ PHASE 3 --- STOP VOTING, COUNT VOTES, REORDER GALLERY -----------------------------------------------------------------------------
 
 function afcontest_create_results( $node ) {
+    db_query('UPDATE {webform} SET status = 0 WHERE nid = %d', $node->vote_form );
+
+    // TODO - secist hlasy z hlasovani, najit poradi uzivatelu, preradit galerii 
+    // vytvorit stranku s vysledky, do ni vypsat vysledky a embednout galerii
+
+    //db_query('UPDATE {afcontest} SET results_page = %d WHERE nid = %d', $rnode->nid, $node->nid);
     return $node;
 }
 
