@@ -219,11 +219,14 @@ function afcontest_get_submission_files( $form_nid ) {
   return $files;
 }
 
-function afcontest_copy_files_to_gallery( $form_nid, $gallery_nid ) {
-   $album = db_fetch_object(db_query("SELECT path FROM {gallerix_albums} WHERE nid = %d", $gallery_nid));
+function afcontest_copy_files_to_gallery( $form_nid, $gallery_node ) {
+   $album = db_fetch_object(db_query("SELECT path FROM {gallerix_albums} WHERE nid = %d", $gallery_node->nid));
    $album_path = $_SERVER['DOCUMENT_ROOT'].base_path().$album->path."/original/";
 
    $files = afcontest_get_submission_files( $form_nid );
+   $submissions = array();
+   $timestamp = time();
+   $uid = strval($gallery_node->uid*1);
    foreach ( $files as $k=>$v ) {
        // zkopirovat soubory do adresare galerie
        $filename = sprintf("%03d_%s_%s", $k, $v->name, pathinfo( $v->filename, PATHINFO_BASENAME ) );
@@ -232,9 +235,13 @@ function afcontest_copy_files_to_gallery( $form_nid, $gallery_nid ) {
          $album_path.$filename
        );
        // pridat zaznamy do tabulky alba 
-       // TODO
+       db_query("INSERT INTO {gallerix_pictures} (nid, uid, path, name, caption, original_name, created, added, built ) VALUES (%d, %d, '%s', '%s', '%s', '%s', %d, %d, %d)", 
+           $gallery_node->nid, $uid, substr($album->path,1)."/original/".$filename, $filename, str_pad($k,3,"0",STR_PAD_LEFT).": ".$v->name, $filename, $timestamp, $timestamp, 0 );
+
+       $submissions[ $k ] = $v->name;
    }
 
+   return $submissions;
 }
 
 function afcontest_add_gallery( $node ) {
@@ -267,9 +274,10 @@ function afcontest_create_voting( $node ) {
     // db_query('UPDATE {afcontest} SET title_page = %d WHERE nid = %d', 123, $node->nid);
 
     // create node gallery node
-    afcontest_add_gallery( $node );
+    $gnode = afcontest_add_gallery( $node );
 
     // add image
+    //afcontest_copy_files_to_gallery( $node->submit_form, $gnode->nid );
 
     return $node;
 }
@@ -294,9 +302,13 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   //$form2 = node_load($node->submit_form);
   //print_r($form1);
   //print_r($form2);
+  $gnode = node_load(1536);
     
   //print_r( afcontest_get_submission_files( 1534 ) );
-  afcontest_copy_files_to_gallery( 1534, 1536 );
+  $submissions = afcontest_copy_files_to_gallery( 1534, $gnode );
+
+
+  //TODO vyzkouset, jestli se spravne prida zaznam kazdeho obrazku do tabulky gallerix_pictures
 
   // gallery labels XXX: nick
 
@@ -331,6 +343,7 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
 
   $output .= print_r($node, true);
+  $output .= print_r($submissions, true);
   //$output .= print_r($confs, true);
 
   $node->content['body'] = array(
