@@ -464,13 +464,45 @@ function afcontest_count_votes( $form_nid, $pictures ) {
         $votes[ $row->data ] += $points;
     }
     $res = db_fetch_object(db_query("SELECT COUNT(DISTINCT sid) AS voters FROM {webform_submitted_data} WHERE nid = %d GROUP BY sid", $form_nid));
-    $votes[0] = $res->voters;
 
-    return $votes;
+    $places = array();
+    foreach ( $votes as $k=>$v ) {
+        if ( !array_key_exists( $v, $places ) )
+            $places[ $v ] = array();
+        $places[ $v ][] = $k;
+    }
+
+    krsort( $places, SORT_NUMERIC );
+
+    $places[-1] = $res->voters;
+
+    return $places;
 }
 
-function afcontest_order_gallery_by_results( $node, $pictures ) {
-    // TODO set gallery sorting by order, update order and captions
+function afcontest_order_gallery_by_results( $node, $pictures, $votes ) {
+    $place = 1;
+    foreach ( $votes as $p => $ids ) {
+        foreach ( $ids as $k=>$i ) {
+            $picture = db_fetch_object(db_query("SELECT pid, caption FROM {gallerix_pictures} WHERE caption LIKE '%s' AND nid = %d", 
+                str_pad( $i, 3, "0", STR_PAD_LEFT ).": %", $node->gallery
+                ));
+            $parts = explode( ":", $picture->caption );
+
+            if ( count($ids) == 1 )
+                $caption = $place.".";
+            else
+                $caption = $place.".-".($place+count($ids)-1).".";
+            $caption .= " místo:".$parts[1]." (".$p." bodů)";
+            $sortplace = strval($place+$k);
+
+            db_query("UPDATE {gallerix_pictures} SET caption = '%s', sort = %d WHERE nid = %d AND pid = %d", 
+                $caption, $sortplace, $node->gallery, $picture->pid );
+        }
+        $place += count( $ids );
+    }
+            
+    $settings = serialize( array("sort"=>"custom") );
+    db_query("UPDATE {gallerix_albums} SET settings = '%s'  WHERE nid = %d", $settings, $node->gallery );
 }
 
 function afcontest_create_results_page( $node, $pictures, $voters_count ) {
@@ -484,10 +516,12 @@ function afcontest_create_results( $node ) {
 
     // vytvorit stranku s vysledky, do ni vypsat vysledky a embednout galerii
     $pictures = afcontest_get_pictures( $node->gallery );
-    $voters_count = array_shift( $pictures );
     $votes = afcontest_count_votes( $node->vote_form, $pictures );
-    afcontest_order_gallery_by_results( $node, $pictures );
-    $rnode = afcontest_create_results_page( $node, $pictures, $voters_count );
+    $voters_count = $votes[-1];
+    unset( $votes[-1] );
+
+    afcontest_order_gallery_by_results( $node, $pictures, $votes );
+    //$rnode = afcontest_create_results_page( $node, $pictures, $voters_count );
 
     //db_query('UPDATE {afcontest} SET results_page = %d WHERE nid = %d', $rnode->nid, $node->nid);
     //$node->results_page = $rnode->nid;
@@ -537,7 +571,7 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
   //$output .= "<p>phase: ".$phase."</p>";
   //$output .= afcontest_create_vote_form($node, array( "001: jarnik", "003: kokodak", "004: papinak" ) );
   //$output .= print_r( afcontest_get_pictures( 1536 ), true );
-  $output .= print_r( afcontest_count_votes( 1560, afcontest_get_pictures( 1556 ) ), true );
+  //$output .= print_r( afcontest_count_votes( 1560, afcontest_get_pictures( 1556 ) ), true );
 
   if ( $phase <= 0 ) {
       $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
