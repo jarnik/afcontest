@@ -44,6 +44,37 @@ function afcontest_form(&$node, $form_state) {
         '#default_value' => $node->year, 
         '#maxlength' => 4
     );
+
+    $form['title_page'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Titulni stranka (node ID)', 
+        '#default_value' => ( $node->title_page ? $node->title_page : "0"), 
+        '#maxlength' => 4
+    );
+    $form['submit_form'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Formular pro odesilani prispevku (node ID)', 
+        '#default_value' => ( $node->submit_form ? $node->submit_form : "0"), 
+        '#maxlength' => 4
+    );
+    $form['gallery'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Galerie (node ID)', 
+        '#default_value' => ( $node->gallery ? $node->gallery : "0"), 
+        '#maxlength' => 4
+    );
+    $form['vote_form'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Formular pro hlasovani (node ID)', 
+        '#default_value' => ( $node->vote_form ? $node->vote_form : "0"), 
+        '#maxlength' => 4
+    );
+    $form['results_page'] = array(
+        '#type' => 'textfield', 
+        '#title' => 'Stranka s vysledky (node ID)', 
+        '#default_value' => ( $node->vote_form ? $node->vote_form : "0"), 
+        '#maxlength' => 4
+    );
     return $form;
 }
 
@@ -195,7 +226,9 @@ function afcontest_add_new($node) {
  */
 function afcontest_update($node) {
   // Update afcontest settings.
-  db_query('UPDATE {afcontest} SET year = "%s", slug = "%s" WHERE nid = %d', $node->year, $node->slug, $node->nid);
+  db_query('UPDATE {afcontest} SET year = "%s", slug = "%s", title_page = %d, submit_form = %d, gallery = %d, vote_form = %d, results_page = %d WHERE nid = %d', 
+    $node->year, $node->slug, $node->title_page, $node->submit_form, $node->gallery, $node->vote_form, $node->results_page,
+    $node->nid);
 }
 
 /**
