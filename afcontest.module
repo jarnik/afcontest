@@ -376,6 +376,13 @@ function afcontest_create_vote_form($node, $items) {
       $n->uid = $node->uid;
       node_save( $n );
       drupal_set_message("Vytvořen formulář ".$n->title.".");
+        
+      db_query("INSERT INTO {webform_validation_rule} (rulename, nid, validator) VALUES ('%s', %d, '%s')", 'Unique', $n->nid, 'unique' );
+
+      $valid_rule = db_fetch_object(db_query("SELECT ruleid FROM {webform_validation_rule} WHERE nid = %d", $n->nid));
+      for ( $i = 1; $i < 4; $i++ )
+        db_query("INSERT INTO {webform_validation_rule_components} (ruleid, cid) VALUES (%d, %d)", $valid_rule->ruleid, $i );
+
   } else
       drupal_set_message("Node ".$node->title." added incorrectly", "error");
   return $n;
