@@ -72,7 +72,7 @@ function afcontest_form(&$node, $form_state) {
     $form['results_page'] = array(
         '#type' => 'textfield', 
         '#title' => 'Stranka s vysledky (node ID)', 
-        '#default_value' => ( $node->vote_form ? $node->vote_form : "0"), 
+        '#default_value' => ( $node->results_page ? $node->results_page : "0"), 
         '#maxlength' => 4
     );
     return $form;
@@ -199,7 +199,7 @@ function afcontest_add_new($node) {
     <li>maximální rozměry jsou 1024x768, povolené formáty JPG a PNG</li>
     <li>příspěvky můžete posílat do <strong>10. dubna 2012</strong></li>
 </ul>
-<p class="links"><a href="'.$form_node->path.'">Odeslat fotku</a></p><p>&nbsp;</p>
+<p class="links"><a href="/souteze/'.$node->title.'/'.$node->year.'/odeslani">Odeslat fotku</a></p><p>&nbsp;</p>
 <h3>Co můžete vyhrát?</h3>
 <p>popis cen...</p>
 '
@@ -481,6 +481,7 @@ function afcontest_count_votes( $form_nid, $pictures ) {
 
 function afcontest_order_gallery_by_results( $node, $pictures, $votes ) {
     $place = 1;
+    $winners = array();
     foreach ( $votes as $p => $ids ) {
         foreach ( $ids as $k=>$i ) {
             $picture = db_fetch_object(db_query("SELECT pid, caption FROM {gallerix_pictures} WHERE caption LIKE '%s' AND nid = %d", 
@@ -494,6 +495,7 @@ function afcontest_order_gallery_by_results( $node, $pictures, $votes ) {
                 $caption = $place.".-".($place+count($ids)-1).".";
             $caption .= " místo:".$parts[1]." (".$p." bodů)";
             $sortplace = strval($place+$k);
+            $winners[] = $caption;
 
             db_query("UPDATE {gallerix_pictures} SET caption = '%s', sort = %d WHERE nid = %d AND pid = %d", 
                 $caption, $sortplace, $node->gallery, $picture->pid );
@@ -503,11 +505,42 @@ function afcontest_order_gallery_by_results( $node, $pictures, $votes ) {
             
     $settings = serialize( array("sort"=>"custom") );
     db_query("UPDATE {gallerix_albums} SET settings = '%s'  WHERE nid = %d", $settings, $node->gallery );
+
+    return $winners;
 }
 
-function afcontest_create_results_page( $node, $pictures, $voters_count ) {
-    // TODO
-    return $n;
+function afcontest_create_results_page( $node, $pictures, $voters_count, $winners ) {
+  $winners_list = array();
+  foreach ( $winners as $w ) {
+      $winners_list[] = "<li>".$w."</li>";      
+  }
+  $winners_list = implode("\n",$winners_list);
+
+  $n = array(
+    'title' => $node->title." ".$node->year." - Výsledky",
+    'language' => 'cs',
+    'type' => 'page',
+    'promote' => 0,
+    'status' => 0,
+    'comment' => 0,
+    'format' => 3,
+    'uid' => $node->uid,
+    'body' => '<p>Do X. ročníku soutěže '.$node->title.' přišlo <strong>'.count($pictures).'</strong> fotek, o jejichž výsledném pořadí rozhodlo '.$voters_count.' hlasujících návštěvníků webu. 
+    Děkujeme všem soutěžícím i hlasujícím a blahopřejeme vítězům!</p>
+    <p>Výsledky jsou následující:</p>
+    <ul>'.$winners_list.'</ul>    
+    [[nid:'.$node->gallery.']]',
+    'name' => $node->title,
+    'path' => 'souteze/'.$node->slug.'/'.$node->year.'/vysledky' // vytvori alias, ale nezmeni vlastnost samotneho node-u
+  );  
+  if ( $n = node_submit( $n ) ) {
+      $n->uid = $node->uid;
+      node_save( $n );
+      drupal_set_message("Vytvořena stránka ".$n->title.".");
+  } else
+      drupal_set_message("Node ".$n->title." added incorrectly", "error");
+
+  return $n;
 }
 
 function afcontest_create_results( $node ) {
@@ -520,11 +553,11 @@ function afcontest_create_results( $node ) {
     $voters_count = $votes[-1];
     unset( $votes[-1] );
 
-    afcontest_order_gallery_by_results( $node, $pictures, $votes );
-    //$rnode = afcontest_create_results_page( $node, $pictures, $voters_count );
+    $winners = afcontest_order_gallery_by_results( $node, $pictures, $votes );
+    $rnode = afcontest_create_results_page( $node, $pictures, $voters_count, $winners );
 
-    //db_query('UPDATE {afcontest} SET results_page = %d WHERE nid = %d', $rnode->nid, $node->nid);
-    //$node->results_page = $rnode->nid;
+    db_query('UPDATE {afcontest} SET results_page = %d WHERE nid = %d', $rnode->nid, $node->nid);
+    $node->results_page = $rnode->nid;
     return $node;
 }
 
