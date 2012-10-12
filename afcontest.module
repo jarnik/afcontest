@@ -112,9 +112,9 @@ function afcontest_create_submit_form($file_save_dir, $node) {
         'submit_notice' => '1',
         'submit_text' => 'Odeslat fotku',
         // Users can only submit once how many kittens they want.
-        'submit_limit' => '-1',
+        'submit_limit' => '2',
         'submit_interval' => '-1',
-        'total_submit_limit' => '2',
+        'total_submit_limit' => '-1',
         'total_submit_interval' => '-1',
         'record_exists' => TRUE,
         'roles' => array(
@@ -127,6 +127,7 @@ function afcontest_create_submit_form($file_save_dir, $node) {
       ),
   );
    if ( $n = node_submit( $n ) ) {
+      $n->uid = $node->uid;
       node_save( $n );
       drupal_set_message("Vytvořen formulář ".$n->title.".");
   } else
@@ -177,6 +178,7 @@ function afcontest_add_new($node) {
     // TODO - nenechat vytvorit alias, ale zmenit primo u node-u
   );  
   if ( $title_page = node_submit( $title_page ) ) {
+      $title_page->uid = $node->uid;
       node_save( $title_page );
       drupal_set_message("Vytvořena stránka ".$node->title.".");
   } else
@@ -282,20 +284,123 @@ function afcontest_create_gallery( $node ) {
     afcontest_copy_files_to_gallery( $node->submit_form, $gnode );
 
     db_query('UPDATE {afcontest} SET gallery = %d WHERE nid = %d', $gnode->nid, $node->nid);
+    $node->gallery = $gnode->nid;
 
     return $node;
 }
 
 // ------ PHASE 2 --- PREPARE VOTING FROM MODERATED GALLERY -----------------------------------------------------------------------------
 
+function afcontest_create_vote_form($node, $items) {
+
+  $items_formatted = "";
+  foreach ( $items as $i ) {
+     $parts = explode(":", $i);
+     $items_formatted[] = intval($parts[0])."|".$i; //1|01: hAnko
+  }
+  $items_formatted = implode("\n",$items_formatted);
+    
+  $components = array();
+  for ( $i = 1; $i < 4; $i++ ) {
+    $components[$i] = array(
+      'cid' => $i,
+      'pid' => 0,
+      // I don't trust the admin to make a key based on input :)
+      'form_key' => $i.'_misto',
+      'name' => $i.". místo",
+      // I want all lines to be numeric type component.
+      'type' => 'select',
+      'extra' => array(
+        'items' => $items_formatted,
+        'multiple' => 0,
+        'aslist' => 1,
+      ),
+      'mandatory' => '1',
+      'weight' => 0,
+      'page_num' => 1
+    );
+    }
+
+  $n = array(
+    'type' => 'webform',
+    'uid' => $node->uid,
+    'title' => $node->title." ".$node->year." - Hlasování",
+    'name' => $node->title." ".$node->year." - Hlasování",
+    'language' => 'cs',
+    'promote' => 0,
+    'status' => 0,
+    'comment' => 0,
+    'path' => "souteze/".$node->slug."/".$node->year."/hlasovani",
+    'format' => 3,
+    'webform' => array(
+        'confirmation' => '<p>Děkujeme za váš hlas!</p>',
+        'confirmation_format' => 1,
+        'redirect_url' => '<confirmation>',
+        'status' => '1',
+        'block' => '0',
+        'teaser' => '0',
+        'allow_draft' => '0',
+        'auto_save' => '0',
+        'submit_notice' => '1',
+        'submit_text' => 'Odeslat',
+        // Users can only submit once how many kittens they want.
+        'submit_limit' => '1',
+        'submit_interval' => '-1',
+        'total_submit_limit' => '-1',
+        'total_submit_interval' => '-1',
+        'record_exists' => TRUE,
+        'roles' => array(
+          // Only authenticated users can submit this webform.
+          0 => '2',
+        ),
+        'emails' => array(),
+        // Here comes our $components array.
+        'components' => $components,
+      ),
+    'body' => '
+    <p>Do X. ročníku soutěže '.$node->title.' přišlo <strong>'.count($items).'</strong> fotek, o jejichž výsledném pořadí můžete právě teď rozhodnout</p>
+
+    <p>V následující galerii jsou fotky označeny soutěžními čísly, hlasovací formulář je ve spodní části stránky. Pro každé místo vyberte jednu fotku.</p>
+
+    <p>Bodování je následující:</p>
+    <ul>
+        <li>1. místo - <strong>5 bodů</strong></li>
+        <li>2. místo - <strong>3 body</strong></li>
+        <li>3. místo - <strong>1 bod</strong></li>
+    </ul>
+    <p>O výsledném pořadí rozhodne součet všech bodů. Hlasování probíhá od <strong>XXX do XXX</strong></p>
+    [[nid:'.$node->gallery.']]
+    '      
+  );
+   if ( $n = node_submit( $n ) ) {
+      $n->uid = $node->uid;
+      node_save( $n );
+      drupal_set_message("Vytvořen formulář ".$n->title.".");
+  } else
+      drupal_set_message("Node ".$node->title." added incorrectly", "error");
+  return $n;
+}
+    
+function afcontest_get_pictures( $gallery_nid ) {
+    $pictures = array();
+    $res = db_query("SELECT caption FROM {gallerix_pictures} WHERE nid = %d ORDER BY caption", $gallery_nid );
+    while ($row = db_fetch_object($res)) {
+        $pictures[] = $row->caption;
+    }
+    return $pictures;
+}
+
 function afcontest_create_voting( $node ) {
 
-    // TODO - podle popisu obrazku v galerii (003: Borecek)  vytvorit seznam pro hlasovani
+    $pictures = afcontest_get_pictures( $node->gallery );
 
     // vytvorit hlasovaci formular
     // vlozit do nej galerii
+    $fnode = afcontest_create_vote_form( $node, $pictures );
 
-    //db_query('UPDATE {afcontest} SET vote_form = %d WHERE nid = %d', $fnode->nid, $node->nid);
+    db_query('UPDATE {afcontest} SET vote_form = %d WHERE nid = %d', $fnode->nid, $node->nid);
+    $node->vote_form = $fnode->nid;
+
     return $node;
 }
 
@@ -308,6 +413,7 @@ function afcontest_create_results( $node ) {
     // vytvorit stranku s vysledky, do ni vypsat vysledky a embednout galerii
 
     //db_query('UPDATE {afcontest} SET results_page = %d WHERE nid = %d', $rnode->nid, $node->nid);
+    //$node->results_page = $rnode->nid;
     return $node;
 }
 
@@ -352,6 +458,8 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
       $phase = 4;
 
   //$output .= "<p>phase: ".$phase."</p>";
+  //$output .= afcontest_create_vote_form($node, array( "001: jarnik", "003: kokodak", "004: papinak" ) );
+  //$output .= print_r( afcontest_get_pictures( 1536 ), true );
 
   if ( $phase <= 0 ) {
       $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
@@ -383,7 +491,8 @@ function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
       }
   }
 
-  //$output .= print_r($node, true);
+  //$l = node_load( 1322 );
+  //$output .= print_r($l, true);
 
   $node->content['body'] = array(
     '#value' => $output
