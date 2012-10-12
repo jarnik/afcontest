@@ -97,6 +97,89 @@ function afcontest_insert($node) {
   afcontest_add_new( $node );
 }
 
+/**
+ * Implementation of hook_view().
+ *
+ * @param $block
+ *   An extra parameter that adapts the hook to display a block-ready
+ *   rendering of the afcontest.
+ */
+function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
+  global $user;
+
+  if ( $node->comment > 0 ) {
+      $node->comment = 0;
+      node_save( $node );
+  }
+
+  if ( $_GET['action'] == "init" ) {
+      $node = afcontest_add_new( $node );
+  } else if ( $_GET['action'] == "create_gallery" ) {
+      $node = afcontest_create_gallery( $node );
+  } else if ( $_GET['action'] == "create_voting" ) {
+      $node = afcontest_create_voting( $node );
+  } else if ( $_GET['action'] == "create_results" ) {
+      $node = afcontest_create_results( $node );
+  }
+
+  $output = '<p>Název: '.$node->title.'</br>Rok: '.$node->year.'</br>Slug: '.$node->slug.'</p>';
+
+  $phase = -1;
+  if ( $node->title_page == 0 ) {
+      $phase = 0;
+  } else if ( $node->gallery == 0 ) {
+      $phase = 1;
+  } else if ( $node->vote_form == 0 ) {
+      $phase = 2;
+  } else if ( $node->results_page == 0 ) {
+      $phase = 3;
+  } else
+      $phase = 4;
+
+  //$output .= "<p>phase: ".$phase."</p>";
+  //$output .= afcontest_create_vote_form($node, array( "001: jarnik", "003: kokodak", "004: papinak" ) );
+  //$output .= print_r( afcontest_get_pictures( 1536 ), true );
+  //$output .= print_r( afcontest_count_votes( 1560, afcontest_get_pictures( 1556 ) ), true );
+
+  if ( $phase <= 0 ) {
+      $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
+  } else {
+      $url_title_page = '/souteze/'.$node->slug.'/'.$node->year; // vytvori alias, ale nezmeni vlastnost samotneho node-u
+      $output .= '<h3>Titulní stránka: <a href="'.$url_title_page.'">'.$url_title_page.'</a></h3>';
+      $url_submit_form = "/souteze/".$node->slug."/".$node->year."/odeslani";
+      $output .= '<h3>Formulář pro odesílání příspěvků: <a href="'.$url_submit_form.'">'.$url_submit_form.'</a></h3>';
+
+      if ( $phase <= 1 ) {
+         $output .= '<p class="links"><a href="?action=create_gallery">Stopnout příjem příspěvků a vytvořit z nich galerii</a></p>';
+      } else {
+         $url_gallery = "/souteze/".$node->slug."/".$node->year."/galerie";
+         $output .= '<h3>Galerie: <a href="'.$url_gallery.'">'.$url_gallery.'</a></h3>';
+
+         if ( $phase <= 2 ) {
+            $output .= '<p class="links"><a href="?action=create_voting">Vytvořit podle galerie hlasovací formulář</a></p>';
+         } else {
+            $url_vote_form = "/souteze/".$node->slug."/".$node->year."/hlasovani";
+            $output .= '<h3>Hlasovací formulář: <a href="'.$url_vote_form.'">'.$url_vote_form.'</a></h3>';
+
+            if ( $phase <= 3 ) {
+                $output .= '<p class="links"><a href="?action=create_results">Stopnout hlasování, srovnat galerii podle výsledků, vytvořit stránku výsledků</a></p>';
+            } else {
+                $url_results_page = "/souteze/".$node->slug."/".$node->year."/vysledky";
+                $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
+            }
+         }
+      }
+  }
+
+  //$l = node_load( 1322 );
+  //$output .= print_r($l, true);
+
+  $node->content['body'] = array(
+    '#value' => $output
+  );
+  return $node;
+}
+
 // ------ PHASE 0 --- CREATE SUBMISSION FORM AND TITLE PAGE -----------------------------------------------------------
 
 function afcontest_create_submit_form($file_save_dir, $node) {
@@ -275,9 +358,8 @@ function afcontest_get_submission_files( $form_nid ) {
   $res = db_query($query, $form_nid );
 
   $files = array();
-  while ($row = db_fetch_object($res)) {
+  while ($row = db_fetch_object($res))
       $files[] = $row;   
-  }
 
   return $files;
 }
@@ -376,7 +458,6 @@ function afcontest_create_vote_form($node, $items) {
         'auto_save' => '0',
         'submit_notice' => '1',
         'submit_text' => 'Odeslat',
-        // Users can only submit once how many kittens they want.
         'submit_limit' => '1',
         'submit_interval' => '-1',
         'total_submit_limit' => '-1',
@@ -562,86 +643,4 @@ function afcontest_create_results( $node ) {
 }
 
 
-/**
- * Implementation of hook_view().
- *
- * @param $block
- *   An extra parameter that adapts the hook to display a block-ready
- *   rendering of the afcontest.
- */
-function afcontest_view($node, $teaser = FALSE, $page = FALSE, $block = FALSE) {
-  global $user;
-
-  if ( $node->comment > 0 ) {
-      $node->comment = 0;
-      node_save( $node );
-  }
-
-  if ( $_GET['action'] == "init" ) {
-      $node = afcontest_add_new( $node );
-  } else if ( $_GET['action'] == "create_gallery" ) {
-      $node = afcontest_create_gallery( $node );
-  } else if ( $_GET['action'] == "create_voting" ) {
-      $node = afcontest_create_voting( $node );
-  } else if ( $_GET['action'] == "create_results" ) {
-      $node = afcontest_create_results( $node );
-  }
-
-  $output = '<p>Název: '.$node->title.'</br>Rok: '.$node->year.'</br>Slug: '.$node->slug.'</p>';
-
-  $phase = -1;
-  if ( $node->title_page == 0 ) {
-      $phase = 0;
-  } else if ( $node->gallery == 0 ) {
-      $phase = 1;
-  } else if ( $node->vote_form == 0 ) {
-      $phase = 2;
-  } else if ( $node->results_page == 0 ) {
-      $phase = 3;
-  } else
-      $phase = 4;
-
-  //$output .= "<p>phase: ".$phase."</p>";
-  //$output .= afcontest_create_vote_form($node, array( "001: jarnik", "003: kokodak", "004: papinak" ) );
-  //$output .= print_r( afcontest_get_pictures( 1536 ), true );
-  //$output .= print_r( afcontest_count_votes( 1560, afcontest_get_pictures( 1556 ) ), true );
-
-  if ( $phase <= 0 ) {
-      $output .= '<p class="links"><a href="?action=init">INIT</a></p>';
-  } else {
-      $url_title_page = '/souteze/'.$node->slug.'/'.$node->year; // vytvori alias, ale nezmeni vlastnost samotneho node-u
-      $output .= '<h3>Titulní stránka: <a href="'.$url_title_page.'">'.$url_title_page.'</a></h3>';
-      $url_submit_form = "/souteze/".$node->slug."/".$node->year."/odeslani";
-      $output .= '<h3>Formulář pro odesílání příspěvků: <a href="'.$url_submit_form.'">'.$url_submit_form.'</a></h3>';
-
-      if ( $phase <= 1 ) {
-         $output .= '<p class="links"><a href="?action=create_gallery">Stopnout příjem příspěvků a vytvořit z nich galerii</a></p>';
-      } else {
-         $url_gallery = "/souteze/".$node->slug."/".$node->year."/galerie";
-         $output .= '<h3>Galerie: <a href="'.$url_gallery.'">'.$url_gallery.'</a></h3>';
-
-         if ( $phase <= 2 ) {
-            $output .= '<p class="links"><a href="?action=create_voting">Vytvořit podle galerie hlasovací formulář</a></p>';
-         } else {
-            $url_vote_form = "/souteze/".$node->slug."/".$node->year."/hlasovani";
-            $output .= '<h3>Hlasovací formulář: <a href="'.$url_vote_form.'">'.$url_vote_form.'</a></h3>';
-
-            if ( $phase <= 3 ) {
-                $output .= '<p class="links"><a href="?action=create_results">Stopnout hlasování, srovnat galerii podle výsledků, vytvořit stránku výsledků</a></p>';
-            } else {
-                $url_results_page = "/souteze/".$node->slug."/".$node->year."/vysledky";
-                $output .= '<h3>Výsledky: <a href="'.$url_results_page.'">'.$url_results_page.'</a></h3>';
-            }
-         }
-      }
-  }
-
-  //$l = node_load( 1322 );
-  //$output .= print_r($l, true);
-
-  $node->content['body'] = array(
-    '#value' => $output
-  );
-  return $node;
-}
 
