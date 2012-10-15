@@ -282,7 +282,7 @@ function afcontest_add_new($node) {
     <li>maximální rozměry jsou 1024x768, povolené formáty JPG a PNG</li>
     <li>příspěvky můžete posílat do <strong>10. dubna 2012</strong></li>
 </ul>
-<p class="links"><a href="/souteze/'.$node->title.'/'.$node->year.'/odeslani">Odeslat fotku</a></p><p>&nbsp;</p>
+<p class="links"><a href="/souteze/'.$node->slug.'/'.$node->year.'/odeslani">Odeslat fotku</a></p><p>&nbsp;</p>
 <h3>Co můžete vyhrát?</h3>
 <p>popis cen...</p>
 '
